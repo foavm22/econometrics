@@ -1,0 +1,111 @@
+---
+title: "Analysis of the effect of reducing working hours"
+author: "Dain Lee"
+date: "2024-01-09"
+output: 
+  html_document :
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(SmartEDA)
+```
+
+
+# 0. Data Load
+
+```{r}
+ds <- read.csv('C:/Users/dain/Downloads/R/oes2002_2006.csv')
+summary(ds)
+```
+
+```{r}
+ggplot(data = ds) + geom_bar(mapping = aes(x = year))
+```
+
+```{r}
+ggplot(data = ds) + geom_bar(mapping = aes(x = size))
+```
+
+```{r}
+ggplot(data = ds) + geom_bar(mapping = aes(x = male))
+```
+
+```{r}
+ggplot(data = ds) +
+  geom_histogram(aes(x=age), color='red', fill='red', alpha=0.2, linetype=2)
+```
+
+```{r}
+ggplot(data = ds) +
+  geom_histogram(aes(x=edu), color='blue', fill='blue', alpha=0.5, linetype=2)
+```
+
+# 1. EDA
+
+```{r}
+ExpData(ds, type = 1)
+```
+
+```{r}
+ExpData(ds, type=2)
+```
+
+```{r}
+ExpNumStat(ds)
+```
+```{r}
+ExpNumStat(ds, by='GA', gp='size')
+```
+
+```{r}
+plot <- ds |> filter(size==8, male==0) |> ExpNumViz(Page=c(3,3))
+
+plot
+```
+
+```{r}
+plot <- ds |> ExpNumViz(Page=c(3,3), target = 'size')
+
+plot
+```
+다른 변수는 거의 동일하게 분포한 반면, size=8에서 임금, 실질임금의 이상치가 더 많이 나타남.
+
+```{r}
+plot <- ds |> ExpNumViz(Page=c(3,3), target = 'male')
+
+plot
+```
+
+남성 근로자의 나이가 평균적으로 높고, 정규직 근속연수가 조금 더 긺. 임금, 실질임금의 꼬리가 긺(이상치가 있음)
+
+
+```{r}
+plot <- ds |> ExpNumViz(Page=c(3,3), target = 'mar')
+
+plot
+```
+
+당연하게 기혼 근로자의 나이와 근속연수가 평균적으로 더 높고, 임금, 실질임금의 꼬리가 긺
+
+```{r}
+plot <- ds |> ExpNumViz(Page=c(3,3), target = 'metro')
+
+plot
+```
+
+```{r}
+plot <- ds |> ExpNumViz(Page=c(3,3), target = 'non_regular')
+
+plot
+```
+
+비정규직 근로자의 교육연수와 근속연수가 큰 분산을 보이며 임금의 이상치는 정규직에 비해 적게 발생한다.
+
+```{r}
+ExpCTable(ds)
+```
