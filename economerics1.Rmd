@@ -23,36 +23,14 @@ ds <- read.csv('C:/Users/dain/Downloads/R/oes2002_2006.csv')
 summary(ds)
 ```
 
-```{r}
-ggplot(data = ds) + geom_bar(mapping = aes(x = year))
-```
-
-```{r}
-ggplot(data = ds) + geom_bar(mapping = aes(x = size))
-```
-
-```{r}
-ggplot(data = ds) + geom_bar(mapping = aes(x = male))
-```
-
-```{r}
-ggplot(data = ds) +
-  geom_histogram(aes(x=age), color='red', fill='red', alpha=0.2, linetype=2)
-```
-
-```{r}
-ggplot(data = ds) +
-  geom_histogram(aes(x=edu), color='blue', fill='blue', alpha=0.5, linetype=2)
-```
-
 # 1. EDA
 
 ```{r}
-ExpData(ds, type = 1)
+Expds(ds, type = 1)
 ```
 
 ```{r}
-ExpData(ds, type=2)
+Expds(ds, type=2)
 ```
 
 ```{r}
@@ -109,3 +87,123 @@ plot
 ```{r}
 ExpCTable(ds)
 ```
+
+```{r}
+plot2 <- ExpCatViz(ds)
+plot2
+```
+
+
+# 2. Estimation of Systematic Differnce between Size=8 and 9
+
+```{r}
+ds$Q <- as.numeric(ds$size==9)
+
+r1 = lm(male~Q, data=ds)
+r2 = lm(edu~Q, data=ds)
+r3 = lm(mar~Q, data=ds)
+r4 = lm(tenure~Q, data=ds)
+r5 = lm(metro~Q, data=ds)
+r6 = lm(non_regular~Q, data=ds)
+r7 = lm(weektime~Q, data=ds)
+r8 = lm(hourlywage~Q, data=ds)
+r9 = lm(hourly_wage_r~Q, data=ds)
+
+summary(r1)
+summary(r2)
+summary(r3)
+summary(r4)
+summary(r5)
+summary(r6)
+summary(r7)
+summary(r8)
+summary(r9)
+```
+
+직책, 산업군을 제외한 모든 변수가 기업의 규모에 따라 다르다.
+size=9가 주당 근무시간은 더 적고, 주당 임금, 실질 임금은 평균적으로 더 높다.
+
+
+# 3. Introduction to DD(Differnce in Differnce)
+DD(이중차분법)의 기본 가정은 정책 변화 전의 처리 그룹(treatment)과 통제 그룹(control)의 추세(trend)가
+일정해야 한다는 것이다. 예를 들어 t=-2 시기의 두 그룹의 임금 격차가 t=-1 시기나 t=0 시기에도
+비슷하게 유지되어야 t=1 시기의 임금 변화가 처리 효과로서 유의미하다는 의미이다.
+
+
+```{r}
+ds$y1 = ds$weektime
+ds$y2 = ds$hourly_wage_r
+ds$y3 = ds$y1*ds$y2
+
+ds$t02 = as.numeric(ds$year==2002)
+ds$t03 = as.numeric(ds$year==2003)
+ds$t04 = as.numeric(ds$year==2004)
+ds$t05 = as.numeric(ds$year==2005)
+ds$t06 = as.numeric(ds$year==2006)
+```
+
+
+```{r}
+minfo_y1 = aggregate(ds$y1, list(ds$year,ds$Q == 1), mean)
+names(minfo_y1) = c("YR","Treatment","y1")
+
+minfo_y1$Group[1:5] = "y1, Size==8"
+minfo_y1$Group[6:10] = "y1, Size==9"
+
+qplot(YR, y1, data=minfo_y1, geom=c("point","line"), colour=Group,
+      xlab="Year", ylab="Y1",
+      ylim=c(45, 55)) + geom_vline(xintercept = 2004)
+```
+
+
+```{r}
+minfo_y2 = aggregate(ds$y2, list(ds$year,ds$Q == 1), mean)
+names(minfo_y2) = c("YR","Treatment","y2")
+
+minfo_y2$Group[1:5] = "y2, Size==8"
+minfo_y2$Group[6:10] = "y2, Size==9"
+
+qplot(YR, y2, data=minfo_y2, geom=c("point","line"), colour=Group,
+      xlab="Year", ylab="Y2",
+      ylim=c(0, 2)) + geom_vline(xintercept = 2004)
+```
+
+
+```{r}
+minfo_y3 = aggregate(ds$y3, list(ds$year,ds$Q == 1), mean)
+names(minfo_y3) = c("YR","Treatment","y3")
+
+minfo_y3$Group[1:5] = "y3, Size==8"
+minfo_y3$Group[6:10] = "y3, Size==9"
+
+qplot(YR, y3, data=minfo_y3, geom=c("point","line"), colour=Group,
+      xlab="Year", ylab="Y3",
+      ylim=c(45, 90)) + geom_vline(xintercept = 2004)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
