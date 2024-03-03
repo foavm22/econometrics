@@ -1,0 +1,322 @@
+---
+title: "Analysis of the effects of statutory working hours reduction"
+author: "Dain Lee"
+date: "Feb, 2024"
+output: 
+  html_document :
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(SmartEDA)
+library(dplyr)
+library(MASS)
+library(readxl)
+library(HistData)
+library(car)
+library(lmtest)
+library(wooldridge)
+library(ggplot2)
+library(gridExtra)
+```
+
+
+# 0. Data Load
+
+```{r}
+ds <- read.csv('C:/Users/dain/Downloads/R/oes2002_2006.csv')
+summary(ds)
+```
+
+# 1. EDA
+
+```{r}
+ExpData(ds, type = 1)
+```
+
+```{r}
+ExpData(ds, type=2)
+```
+
+```{r}
+ExpNumStat(ds)
+```
+
+```{r}
+ExpNumStat(ds, by='GA', gp='size')
+```
+
+
+```{r}
+plot <- ds |> ExpNumViz(Page=c(3,3), target = 'size')
+
+plot
+```
+
+다른 변수는 거의 동일하게 분포한 반면, size=8에서 임금, 실질임금의 이상치가 더 많이 나타납니다.
+
+
+```{r}
+plot <- ds |> ExpNumViz(Page=c(3,3), target = 'male')
+
+plot
+```
+
+남성 근로자의 나이가 평균적으로 많고, 정규직 근속연수가 조금 더 깁니다. 임금, 실질임금의 꼬리가 깁니다(이상치가 있습니다).
+
+
+
+```{r}
+plot <- ds |> ExpNumViz(Page=c(3,3), target = 'mar')
+
+plot
+```
+
+기혼 근로자의 나이와 근속연수가 평균적으로 더 많(길)고, 임금, 실질임금의 꼬리가 깁니다.
+
+
+
+```{r}
+plot <- ds |> ExpNumViz(Page=c(3,3), target = 'metro')
+
+plot
+```
+
+
+
+```{r}
+plot <- ds |> ExpNumViz(Page=c(3,3), target = 'non_regular')
+
+plot
+```
+
+비정규직 근로자의 교육연수와 근속연수가 큰 분산을 보이며 임금의 이상치는 정규직에 비해 적게 발생합니다.
+
+
+
+```{r}
+ExpCTable(ds)
+```
+
+
+```{r}
+plot2 <- ExpCatViz(ds, Page=c(2,2))
+plot2
+```
+
+
+
+# 2. Estimation of Systematic Differnce between Size=8 and 9
+
+```{r}
+ds$Q <- as.numeric(ds$size==9)
+
+r1 = lm(male~Q, data=ds)
+r2 = lm(edu~Q, data=ds)
+r3 = lm(mar~Q, data=ds)
+r4 = lm(tenure~Q, data=ds)
+r5 = lm(metro~Q, data=ds)
+r6 = lm(non_regular~Q, data=ds)
+r7 = lm(weektime~Q, data=ds)
+r8 = lm(hourlywage~Q, data=ds)
+r9 = lm(hourly_wage_r~Q, data=ds)
+
+summary(r1)
+summary(r2)
+summary(r3)
+summary(r4)
+summary(r5)
+summary(r6)
+summary(r7)
+summary(r8)
+summary(r9)
+```
+
+직책, 산업군을 제외한 모든 변수가 기업의 규모에 따라 다르다.
+size=9가 주당 근무시간은 더 적고, 주당 임금, 실질 임금은 평균적으로 더 높다.
+
+
+
+# Differnce in Differnce
+## 3. Introduction to DD
+DD(이중차분법)의 기본 가정은 정책 변화 전의 처리 그룹(treatment)과 통제 그룹(control)의 추세(trend)가
+일정해야 한다는 것입니다. 예를 들어 t=-2 시기의 두 그룹의 임금 격차가 t=-1 시기나 t=0 시기에도
+비슷하게 유지되어야 t=1 시기의 임금 변화가 처리 효과로서 유의미함을 의미합니다.
+
+
+```{r}
+ds$y1 = ds$weektime
+ds$y2 = ds$hourly_wage_r
+ds$y3 = ds$y1*ds$y2
+
+ds$t02 = as.numeric(ds$year==2002)
+ds$t03 = as.numeric(ds$year==2003)
+ds$t04 = as.numeric(ds$year==2004)
+ds$t05 = as.numeric(ds$year==2005)
+ds$t06 = as.numeric(ds$year==2006)
+```
+
+
+```{r}
+minfo_y1 = aggregate(ds$y1, list(ds$year,ds$Q == 1), mean)
+names(minfo_y1) = c("YR","Treatment","y1")
+
+minfo_y1$Group[1:5] = "y1, Size==8"
+minfo_y1$Group[6:10] = "y1, Size==9"
+minfo_y1
+
+qplot(YR, y1, data=minfo_y1, geom=c("point","line"), colour=Group,
+      xlab="Year", ylab="Y1",
+      ylim=c(45, 55)) + geom_vline(xintercept = 2004)
+```
+
+
+```{r}
+minfo_y2 = aggregate(ds$y2, list(ds$year,ds$Q == 1), mean)
+names(minfo_y2) = c("YR","Treatment","y2")
+
+minfo_y2$Group[1:5] = "y2, Size==8"
+minfo_y2$Group[6:10] = "y2, Size==9"
+minfo_y2
+
+qplot(YR, y2, data=minfo_y2, geom=c("point","line"), colour=Group,
+      xlab="Year", ylab="Y2",
+      ylim=c(0, 2)) + geom_vline(xintercept = 2004)
+```
+
+
+```{r}
+minfo_y3 = aggregate(ds$y3, list(ds$year,ds$Q == 1), mean)
+names(minfo_y3) = c("YR","Treatment","y3")
+
+minfo_y3$Group[1:5] = "y3, Size==8"
+minfo_y3$Group[6:10] = "y3, Size==9"
+minfo_y3
+
+qplot(YR, y3, data=minfo_y3, geom=c("point","line"), colour=Group,
+      xlab="Year", ylab="Y3",
+      ylim=c(45, 90)) + geom_vline(xintercept = 2004)
+```
+
+설명변수 y1은 정책 시행 전인 2002, 2003년에는 데이터 격차가 비슷하게 유지되다 2004년에 급격히 변화합니다.
+한편, y2와 y3는 2004년에 비해서는 2002, 2003년의 격차가 비슷하지만 DD를 사용해 유의미한 변화를 측정하기 위해서는 추가적인 변수 컨트롤이 필요합니다.
+
+
+
+## 4. Control for covariates
+전체 변수에 대해 통제하여 두 그룹의 조건이 완전히 동일한 상태에서 정책 효과가 유의하게 발생하는지 관찰합니다.
+2003년 데이터와 2004년 데이터만 활용하여 두 해 사이의 차이를 보입니다.
+설명변수에 대해 비선형적인 영향을 줄 것으로 예상되는 age 변수에 대해서는 age^2 값을 동시에 활용하겠습니다.
+
+```{r}
+ds$age2 = ds$age^2
+ds$Q4= as.numeric((ds$t03+ds$t04)==1)
+
+reg1 = lm(y1 ~Q*t04+male+age+age2+edu2+edu3+edu4+mar+tenure+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds, Q4==1)
+summary(reg1)
+reg2 = lm(y2 ~Q*t04+male+age+age2+edu2+edu3+edu4+mar+tenure+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds, Q4==1)
+summary(reg2)
+reg3 = lm(y3 ~Q*t04+male+age+age2+edu2+edu3+edu4+mar+tenure+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds, Q4==1)
+summary(reg3)
+```
+
+회귀식의 결과에 따라, 근무시간(y1)은 2시간 감소하였고 실질임금(시급, y2)은 1.2달러 상승, 실질주급(y3)은 22달러 상승하였음을 알 수 있습니다.
+이로써 대기업에 대해서는 정책이 근로자들에게 긍정적으로 작용한 것은 자명해보입니다.
+
+다만, 위 회귀식은 나이 변수를 제외한 모든 변수가 설명변수에 선형적인 영향을 미칠 것을 가정하여 계산된 식입니다.
+그러나 모든 공변량이 선형적인 영향을 주는 것은 아닙니다. 다음 단계에서 직관에 따라 공변량에 추가적인 처치를 하고 다시 관찰해 보겠습니다. 
+
+
+
+## 5. Additional Control for covariates
+age와 비슷하게 설명변수와 포물선 형태의 관계가 있을 것으로 생각되는 tenure 변수에도 tenure^2 변수를 추가로 활용하겠습니다. (Y2, Y3)
+또한, mar*female 변수를 사용하여 기혼 여성의 근무시간 감소를 중점적으로 측정하겠습니다. (Y1, Y3)
+
+```{r}
+ds$tenure2 = ds$tenure^2
+ds$fem = as.numeric(ds$male==0)
+ds$marfem = ds$mar * ds$fem
+
+reg4 = lm(y1 ~Q*t04+male+age+age2+edu2+edu3+edu4+mar+tenure+tenure2+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds, Q4==1)
+summary(reg4)
+reg5 = lm(y2 ~Q*t04+male+age+age2+edu2+edu3+edu4+mar+tenure+tenure2+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds, Q4==1)
+summary(reg5)
+reg6 = lm(y3 ~Q*t04+male+age+age2+edu2+edu3+edu4+mar+tenure+tenure2+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds, Q4==1)
+summary(reg6)
+```
+
+tenure2 변수를 추가하여 계산한 결과, 예상대로 y2와 y3에서 유의한 변수로 작용합니다. 
+위 식에 따르면, 정책 시행으로 실질주급(y3)이 약 23달러 증가하였습니다.
+
+```{r}
+reg7 = lm(y1 ~Q*t04+age+age2+edu2+edu3+edu4+mar*fem+tenure+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds, Q4==1)
+summary(reg7)
+```
+
+marfem 변수를 적용한 회귀식은 4장에서의 결과와 다르지 않습니다.
+기혼 여성의 근무시간이 더 크게 줄어들었을 것이라는 예상과 달리 기혼여성-미혼여성의 차이가 유의하지 않습니다.
+근무시간 단축이 보육정책으로서 활용되었는지 알아보기 위해서는 더 다양한 데이터가 필요하겠습니다.
+
+
+## 6. DD in Size 8
+근무시간 단축은 2004년에 size=9인 그룹(이하 대기업)에 한해 적용되었으나 2005년부터는 size=8 그룹(이하 중견기업)에도 적용되었습니다.
+4장에서 대기업에서는 정책효과가 있었음을 확인하였습니다. 이번 장에서는 중견기업에서도 정책효과가 관찰되는지 알아보겠습니다.
+식은 위에서 유의한 결과를 보였던 모든 변수에 age2와 tenure2를 추가한 공변량을 사용합니다.
+
+```{r}
+ds$Qr= as.numeric(ds$size==8)
+ds$Q6= as.numeric((ds$t04+ds$t05)==1)
+
+reg8 = lm(y1 ~Qr*t05+male+age+age2+edu2+edu3+edu4+mar+tenure+tenure2+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds, Q6==1)
+summary(reg8)
+reg9 = lm(y2 ~Qr*t05+male+age+age2+edu2+edu3+edu4+mar+tenure+tenure2+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds, Q6==1)
+summary(reg9)
+reg10 = lm(y3 ~Qr*t05+male+age+age2+edu2+edu3+edu4+mar+tenure+tenure2+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds, Q6==1)
+summary(reg10)
+```
+
+근무시간은 1.7시간 감소, 실질임금(시급) 0.6달러 감소하였습니다. 두 변수 모두 대기업에 비해 효과가 크게 나타나지 않았습니다.
+특히 실질주급은 분산이 커 정책효과가 있었다고 할 수 없습니다. 근무시간 규제가 중견기업 노동자들에게는 긍정적인 효과를 주지 못했다고 해석할 수 있습니다.
+
+
+
+## 7. Dynamics of the treatment effect over time
+다음은 모든 연도 데이터를 사용하여 정책 효과의 변화를 살펴보겠습니다. 
+우선, DD의 identification condition이 유지되었는지 확인하겠습니다.
+
+```{r}
+reg11 = lm(y1 ~Q*t03+Q*t04+Q*t05+Q*t06+male+age+age2+edu2+edu3+edu4+mar+tenure+tenure2+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds)
+summary(reg11)
+reg12 = lm(y2 ~Q*t03+Q*t04+Q*t05+Q*t06+male+age+age2+edu2+edu3+edu4+mar+tenure+tenure2+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds)
+summary(reg12)
+reg13 = lm(y3 ~Q*t03+Q*t04+Q*t05+Q*t06+male+age+age2+edu2+edu3+edu4+mar+tenure+tenure2+metro+oc2+oc3+oc4+ind2+ind3+ind4+ind5+ind6+ind7+ind8+non_regular, data = ds)
+summary(reg13)
+```
+
+
+
+```{r}
+p_values_y1 <- summary(reg11)$coefficients[, "Pr(>|t|)"]
+p1 <- (tail(p_values_y1,4))
+
+p_values_y2 <- summary(reg12)$coefficients[, "Pr(>|t|)"]
+p2 <- (tail(p_values_y2,4))
+
+p_values_y3 <- summary(reg13)$coefficients[, "Pr(>|t|)"]
+p3 <- (tail(p_values_y3,4))
+
+p_values <- list()
+p_values <- rbind(p1, p2, p3)
+p_values
+```
+
+먼저 앞 두 열을 살펴보면, 2003년의 상호작용항이 통계적으로 유의하지 않으므로 IDC를 만족한다고 할 수 있고, 2004년의 상호작용항의 p-value를 통해 정책의 효과가 유의하게 나타났음을 확인할 수 있습니다.
+2005-2006년의 상호작용항의 p-value는 세 변수에 대해 모두 충분히 작은 p-value가 없는 것으로 보아 이미 두 기업규모 모두에 이미 정책효과가 발현되어 더이상 차이가 나타나지 않음을 알 수 있습니다. 이 결과는 위 분석의 합리성을 뒷받침합니다.
+
+
+
+
